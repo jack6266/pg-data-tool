@@ -15,7 +15,7 @@ func CheckDatabaseConnection(host, port, user, password, dbname string) error {
 	logger.Info("正在检查数据库连接...")
 
 	// 构建连接字符串
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable client_encoding=UTF8",
 		host, port, user, password, dbname)
 
 	// 设置连接超时

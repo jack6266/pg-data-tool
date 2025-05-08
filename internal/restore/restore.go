@@ -141,6 +141,7 @@ func restoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
 		"-v",
 		"--clean",     // 在还原前清除数据库对象
 		"--if-exists", // 如果对象不存在则不报错
+		"--encoding=UTF8",
 	}
 
 	// 根据文件扩展名添加特定参数
@@ -154,6 +155,7 @@ func restoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
 			"-U", cfg.User,
 			"-d", dbName,
 			"-f", backupFile,
+			"--encoding=UTF8",
 		}
 		cmd := exec.Command("psql", args...)
 		logger.Info("执行命令: psql -h %s -p %s -U %s -d %s -f %s", cfg.Host, cfg.Port, cfg.User, dbName, backupFile)

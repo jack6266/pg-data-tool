@@ -60,6 +60,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.File, "file", "", "备份文件路径")
 	rootCmd.Flags().BoolVar(&cfg.BackupAll, "backup-all", false, "备份所有数据库（仅备份时有效）")
 	rootCmd.Flags().BoolVar(&cfg.RestoreAll, "restore-all", false, "还原所有数据库（仅还原时有效）")
+	rootCmd.Flags().StringVarP(&cfg.Format, "format", "f", cfg.Format, "备份格式 (plain, custom, directory, tar)")
 
 	// 备份命令
 	backupCmd := &cobra.Command{

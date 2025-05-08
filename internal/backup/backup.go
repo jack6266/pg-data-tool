@@ -145,6 +145,7 @@ func backupSingleDatabase(cfg *config.Config, dbname, backupDir string) error {
 		"-U", cfg.User,
 		"-F", cfg.Format,
 		"-v",
+		"--encoding=UTF8",
 	}
 
 	// 根据格式添加特定参数

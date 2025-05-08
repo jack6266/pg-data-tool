@@ -181,6 +181,6 @@ pg-data-tool backup -d mydb \
 
 ## 使用示例：
 
-pg-data-tool-windows-amd64.exe --backup --backup-all --host 192.168.12.175 --port 5432 --user postgres --password xxxx
+pg-data-tool-windows-amd64.exe --backup --backup-all --host 192.168.12.175 --port 5432 --user postgres --password xxxx --format custom
 
 pg-data-tool-windows-amd64.exe --restore --restore-all --host 192.168.12.175 --port 5432 --user postgres --password xxxx --file ./backups-250507
