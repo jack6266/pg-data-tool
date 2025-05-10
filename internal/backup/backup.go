@@ -28,7 +28,7 @@ func PerformBackup(cfg *config.Config) error {
 
 	// 创建备份目录（格式：backups-yymmddHHmiss）
 	now := time.Now()
-	backupDir := fmt.Sprintf("backups-%s", now.Format("060102150405"))
+	backupDir := fmt.Sprintf("backups-%s-%s", now.Format("060102150405"), cfg.Host)
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		err := fmt.Errorf("创建备份目录失败: %v", err)
 		logger.Error(err.Error())
