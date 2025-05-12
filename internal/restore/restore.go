@@ -17,6 +17,24 @@ func PerformRestore(cfg *config.Config) error {
 	logger.Info("开始执行数据库还原操作")
 	logger.Info("连接参数: 主机=%s, 端口=%s, 用户=%s", cfg.Host, cfg.Port, cfg.User)
 
+	// 添加确认步骤
+
+	fmt.Printf("警告：即将还原数据库到以下服务器：\n")
+	if cfg.RestoreAll {
+		fmt.Printf("操作：全库还原\n")
+	} else {
+		fmt.Printf("操作：还原数据库 %s\n", cfg.DBName)
+	}
+	fmt.Printf("备份文件：%s\n", cfg.File)
+	fmt.Printf("警告：还原操作将覆盖目标数据库中的现有数据。\n")
+	fmt.Printf("是否继续？(y/N): ")
+
+	var response string
+	fmt.Scanln(&response)
+	if response != "y" && response != "Y" {
+		return fmt.Errorf("用户取消还原操作")
+	}
+
 	// 检查PostgreSQL系统数据库连接
 	if err := utils.CheckPostgresConnection(cfg.Host, cfg.Port, cfg.User, cfg.Password); err != nil {
 		return err
@@ -141,7 +159,6 @@ func restoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
 		"-v",
 		"--clean",     // 在还原前清除数据库对象
 		"--if-exists", // 如果对象不存在则不报错
-		"--encoding=UTF8",
 	}
 
 	// 根据文件扩展名添加特定参数
@@ -155,7 +172,6 @@ func restoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
 			"-U", cfg.User,
 			"-d", dbName,
 			"-f", backupFile,
-			"--encoding=UTF8",
 		}
 		cmd := exec.Command("psql", args...)
 		logger.Info("执行命令: psql -h %s -p %s -U %s -d %s -f %s", cfg.Host, cfg.Port, cfg.User, dbName, backupFile)
