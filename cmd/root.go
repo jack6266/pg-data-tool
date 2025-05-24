@@ -119,7 +119,8 @@ func init() {
 - directory: 目录格式
 - tar: tar归档格式`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return backup.PerformBackup(cfg)
+			backuper := backup.NewBackuper(cfg)
+			return backuper.PerformBackup()
 		},
 	}
 	backupCmd.Flags().StringVarP(&cfg.DBName, "dbname", "d", "", "要备份的数据库名称")
@@ -132,7 +133,8 @@ func init() {
 		Use:   "restore",
 		Short: "执行数据库还原",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return restore.PerformRestore(cfg)
+			restorer := restore.NewRestorer(cfg)
+			return restorer.PerformRestore()
 		},
 	}
 	restoreCmd.Flags().StringVarP(&cfg.DBName, "dbname", "d", "", "要还原的数据库名称")
@@ -166,9 +168,11 @@ var rootCmd = &cobra.Command{
 
 		var err error
 		if backupFlag {
-			err = backup.PerformBackup(cfg)
+			backuper := backup.NewBackuper(cfg)
+			err = backuper.PerformBackup()
 		} else if restoreFlag {
-			err = restore.PerformRestore(cfg)
+			restorer := restore.NewRestorer(cfg)
+			err = restorer.PerformRestore()
 		} else {
 			fmt.Println("请指定 --backup 或 --restore 参数")
 			return

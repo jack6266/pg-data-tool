@@ -2,15 +2,16 @@ package config
 
 // Config 存储数据库连接和操作配置
 type Config struct {
-	Host       string
-	Port       string
-	User       string
-	Password   string
-	DBName     string
-	File       string
-	BackupAll  bool   // 是否备份所有数据库
-	Format     string // 备份格式：custom, plain, directory, tar
-	RestoreAll bool   // 是否还原所有数据库
+	Host         string
+	Port         string
+	User         string
+	Password     string
+	DBName       string
+	File         string
+	BackupAll    bool   // 是否备份所有数据库
+	Format       string // 备份格式：custom, plain, directory, tar
+	RestoreAll   bool   // 是否还原所有数据库
+	AutoCreateDB bool   // 是否自动创建数据库
 }
 
 // NewConfig 创建新的配置实例

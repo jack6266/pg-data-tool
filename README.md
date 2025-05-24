@@ -163,6 +163,28 @@ pg-data-tool-windows-amd64.exe --restore --dbname mydb --file backups/mydb_20240
 pg-data-tool-windows-amd64.exe --restore --dbname mydb --file backups/mydb_20240321_123456.tar
 ```
 
+执行还原时，会进行以下交互式确认：
+```
+警告：即将还原数据库到以下服务器：
+操作：还原数据库 mydb
+备份文件：backups/mydb_20240321_123456.sql
+是否自动创建数据库（如果不存在）？(y/N): y
+自动创建数据库：true
+警告：还原操作将覆盖目标数据库中的现有数据。
+是否继续？(y/N): y
+```
+
+还原完成后，会显示数据库的基本信息：
+```
+数据库基本信息:
+数据库名称: mydb
+数据库大小: 1.2GB
+表数量: 10
+索引数量: 15
+视图数量: 2
+函数数量: 5
+```
+
 2. 全库还原：
 ```bash
 # 从备份目录还原（使用默认密码）
@@ -172,25 +194,63 @@ pg-data-tool-windows-amd64.exe --restore --restore-all --file backups/
 pg-data-tool-windows-amd64.exe --restore --restore-all --file backups/all_dbs_20240321_123456.dir
 ```
 
+执行全库还原时，会进行以下交互式确认：
+```
+警告：即将还原数据库到以下服务器：
+操作：全库还原
+备份文件：backups/
+是否自动创建数据库（如果不存在）？(y/N): y
+自动创建数据库：true
+警告：还原操作将覆盖目标数据库中的现有数据。
+是否继续？(y/N): y
+```
+
+还原完成后，会显示每个数据库的基本信息：
+```
+数据库基本信息:
+数据库名称: db1
+数据库大小: 1.2GB
+表数量: 10
+索引数量: 15
+视图数量: 2
+函数数量: 5
+
+数据库基本信息:
+数据库名称: db2
+数据库大小: 800MB
+表数量: 8
+索引数量: 12
+视图数量: 1
+函数数量: 3
+```
+
 ### 完整参数示例
 
 ```bash
-# 使用默认密码
-pg-data-tool-windows-amd64.exe --backup \
+# 使用默认密码，自动创建数据库
+pg-data-tool-windows-amd64.exe --restore \
     --dbname mydb \
     --host localhost \
     --port 5432 \
     --user postgres \
-    --format plain
+    --auto-create-db \
+    --file backups/mydb_20240321_123456.sql
 
-# 指定自定义密码
-pg-data-tool-windows-amd64.exe --backup \
+# 指定自定义密码，自动创建数据库
+pg-data-tool-windows-amd64.exe --restore \
     --dbname mydb \
     --host localhost \
     --port 5432 \
     --user postgres \
     --password your_password \
-    --format plain
+    --auto-create-db \
+    --file backups/mydb_20240321_123456.sql
+
+# 全库还原，自动创建数据库
+pg-data-tool-windows-amd64.exe --restore \
+    --restore-all \
+    --auto-create-db \
+    --file backups/
 ```
 
 ## 参数说明
@@ -210,6 +270,7 @@ pg-data-tool-windows-amd64.exe --backup \
 - `-d, --dbname`: 要还原的数据库名称
 - `-a, --restore-all`: 还原所有数据库
 - `-f, --file`: 备份文件或目录路径
+- `-c, --auto-create-db`: 自动创建数据库（如果数据库不存在，也可以通过交互方式选择）
 
 ## 备份格式说明
 
