@@ -117,6 +117,29 @@ func getAllDatabases(cfg *config.Config) ([]string, error) {
 func backupSingleDatabase(cfg *config.Config, dbname, backupDir string) error {
 	logger.Info("开始备份数据库: %s", dbname)
 
+	// 获取数据库信息
+	dbInfo, err := getDatabaseInfo(cfg, dbname)
+	if err != nil {
+		logger.Error("获取数据库信息失败: %v", err)
+	} else {
+		// 输出到控制台
+		fmt.Println("\n数据库基本信息:")
+		fmt.Printf("数据库名称: %s\n", dbname)
+		fmt.Printf("数据库大小: %s\n", dbInfo.Size)
+		fmt.Printf("表数量: %d\n", dbInfo.TableCount)
+		fmt.Printf("索引数量: %d\n", dbInfo.IndexCount)
+		fmt.Printf("视图数量: %d\n", dbInfo.ViewCount)
+		fmt.Printf("函数数量: %d\n", dbInfo.FunctionCount)
+
+		// 同时记录到日志
+		logger.Info("数据库基本信息:")
+		logger.Info("- 数据库大小: %s", dbInfo.Size)
+		logger.Info("- 表数量: %d", dbInfo.TableCount)
+		logger.Info("- 索引数量: %d", dbInfo.IndexCount)
+		logger.Info("- 视图数量: %d", dbInfo.ViewCount)
+		logger.Info("- 函数数量: %d", dbInfo.FunctionCount)
+	}
+
 	// 生成备份文件名
 	timestamp := time.Now().Format("150405")
 	var backupFile string
@@ -177,4 +200,105 @@ func backupSingleDatabase(cfg *config.Config, dbname, backupDir string) error {
 
 	logger.Info("数据库 %s 备份成功，文件保存在: %s", dbname, backupFile)
 	return nil
+}
+
+// DatabaseInfo 存储数据库信息
+type DatabaseInfo struct {
+	Size          string
+	TableCount    int
+	IndexCount    int
+	ViewCount     int
+	FunctionCount int
+	Tables        []TableInfo
+}
+
+// TableInfo 存储表信息
+type TableInfo struct {
+	Name       string
+	Size       string
+	RowCount   int64
+	IndexCount int
+}
+
+// getDatabaseInfo 获取数据库信息
+func getDatabaseInfo(cfg *config.Config, dbname string) (*DatabaseInfo, error) {
+	// 连接到数据库
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbname)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("连接数据库失败: %v", err)
+	}
+	defer db.Close()
+
+	info := &DatabaseInfo{}
+
+	// 获取数据库大小
+	var size string
+	err = db.QueryRow(`
+		SELECT pg_size_pretty(pg_database_size($1))
+	`, dbname).Scan(&size)
+	if err != nil {
+		return nil, fmt.Errorf("获取数据库大小失败: %v", err)
+	}
+	info.Size = size
+
+	// 获取表数量
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public'
+	`).Scan(&info.TableCount)
+	if err != nil {
+		return nil, fmt.Errorf("获取表数量失败: %v", err)
+	}
+
+	// 获取索引数量
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public'
+	`).Scan(&info.IndexCount)
+	if err != nil {
+		return nil, fmt.Errorf("获取索引数量失败: %v", err)
+	}
+
+	// 获取视图数量
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM pg_views WHERE schemaname = 'public'
+	`).Scan(&info.ViewCount)
+	if err != nil {
+		return nil, fmt.Errorf("获取视图数量失败: %v", err)
+	}
+
+	// 获取函数数量
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM pg_proc WHERE pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+	`).Scan(&info.FunctionCount)
+	if err != nil {
+		return nil, fmt.Errorf("获取函数数量失败: %v", err)
+	}
+
+	// 获取表详细信息
+	rows, err := db.Query(`
+		SELECT 
+			c.relname as table_name,
+			pg_size_pretty(pg_total_relation_size(c.oid)) as size,
+			(SELECT COUNT(*) FROM pg_indexes WHERE tablename = c.relname) as index_count,
+			(SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = c.relname) as row_count
+		FROM pg_class c
+		WHERE relkind = 'r' AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+		ORDER BY c.relname
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("获取表详细信息失败: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var table TableInfo
+		err := rows.Scan(&table.Name, &table.Size, &table.IndexCount, &table.RowCount)
+		if err != nil {
+			return nil, fmt.Errorf("读取表信息失败: %v", err)
+		}
+		info.Tables = append(info.Tables, table)
+	}
+
+	return info, nil
 }

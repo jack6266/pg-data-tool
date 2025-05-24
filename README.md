@@ -47,58 +47,150 @@ chmod +x build.sh
 
 ### 备份数据库
 
-1. 单库备份：
-```bash
-# 使用默认格式（plain）
-pg-data-tool backup -d mydb
+#### 1. 单库备份
 
-# 指定格式
-pg-data-tool backup -d mydb -f custom    # 二进制格式
-pg-data-tool backup -d mydb -f directory # 目录格式
-pg-data-tool backup -d mydb -f tar       # tar格式
+##### 基本用法
+```bash
+# 使用默认格式（plain）和默认密码
+pg-data-tool-windows-amd64.exe --backup --dbname mydb
+
+# 指定格式和默认密码
+pg-data-tool-windows-amd64.exe --backup --dbname mydb --format custom    # 二进制格式
+pg-data-tool-windows-amd64.exe --backup --dbname mydb --format directory # 目录格式
+pg-data-tool-windows-amd64.exe --backup --dbname mydb --format tar       # tar格式
+```
+
+##### 控制台输出
+执行备份时，会在控制台显示数据库的详细信息，格式如下：
+```
+数据库基本信息:
+数据库名称: mydb
+数据库大小: 1.2GB
+表数量: 10
+索引数量: 15
+视图数量: 2
+函数数量: 5
+```
+
+##### 备份信息
+每次备份都会生成一个额外的 `.info` 文件，包含以下信息：
+- 备份时间
+- 数据库连接信息
+- 数据库基本信息：
+  - 数据库大小
+  - 表数量
+  - 索引数量
+  - 视图数量
+  - 函数数量
+- 表详细信息：
+  - 表名
+  - 表大小
+  - 行数
+  - 索引数量
+
+示例备份信息文件（.info）：
+```json
+{
+  "backup_time": "2024-03-21 14:30:22",
+  "host": "localhost",
+  "port": "5432",
+  "user": "postgres",
+  "database": "mydb",
+  "format": "custom",
+  "file": "backups-240321143022-localhost/mydb_143022.backup",
+  "database_info": {
+    "size": "1.2GB",
+    "table_count": 10,
+    "index_count": 15,
+    "view_count": 2,
+    "function_count": 5,
+    "tables": [
+      {
+        "name": "users",
+        "size": "256MB",
+        "row_count": 10000,
+        "index_count": 3
+      },
+      {
+        "name": "orders",
+        "size": "512MB",
+        "row_count": 50000,
+        "index_count": 4
+      }
+    ]
+  }
+}
+```
+
+##### 日志信息
+备份过程中的日志会记录以下信息：
+```
+[INFO] 开始执行数据库备份操作
+[INFO] 连接参数: 主机=localhost, 端口=5432, 用户=postgres
+[INFO] 备份格式: custom
+[INFO] 备份文件将保存在: backups-240321143022-localhost
+[INFO] 开始备份数据库: mydb
+[INFO] 数据库基本信息:
+[INFO] - 数据库大小: 1.2GB
+[INFO] - 表数量: 10
+[INFO] - 索引数量: 15
+[INFO] - 视图数量: 2
+[INFO] - 函数数量: 5
+[INFO] 执行命令: pg_dump -h localhost -p 5432 -U postgres -F custom -v -f backups-240321143022-localhost/mydb_143022.backup mydb
+[INFO] 数据库 mydb 备份成功，文件保存在: backups-240321143022-localhost/mydb_143022.backup
 ```
 
 2. 全库备份：
 ```bash
-# 使用默认格式
-pg-data-tool backup -a
+# 使用默认格式和默认密码
+pg-data-tool-windows-amd64.exe --backup --backup-all
 
-# 指定格式
-pg-data-tool backup -a -f custom
+# 指定格式和默认密码
+pg-data-tool-windows-amd64.exe --backup --backup-all --format custom
 ```
 
 ### 还原数据库
 
 1. 单库还原：
 ```bash
-# SQL格式
-pg-data-tool restore -d mydb -f backups/mydb_20240321_123456.sql
+# SQL格式和默认密码
+pg-data-tool-windows-amd64.exe --restore --dbname mydb --file backups/mydb_20240321_123456.sql
 
-# 二进制格式
-pg-data-tool restore -d mydb -f backups/mydb_20240321_123456.backup
+# 二进制格式和默认密码
+pg-data-tool-windows-amd64.exe --restore --dbname mydb --file backups/mydb_20240321_123456.backup
 
-# tar格式
-pg-data-tool restore -d mydb -f backups/mydb_20240321_123456.tar
+# tar格式和默认密码
+pg-data-tool-windows-amd64.exe --restore --dbname mydb --file backups/mydb_20240321_123456.tar
 ```
 
 2. 全库还原：
 ```bash
-# 从备份目录还原
-pg-data-tool restore -a -f backups/
+# 从备份目录还原（使用默认密码）
+pg-data-tool-windows-amd64.exe --restore --restore-all --file backups/
 
-# 从目录格式备份还原
-pg-data-tool restore -a -f backups/all_dbs_20240321_123456.dir
+# 从目录格式备份还原（使用默认密码）
+pg-data-tool-windows-amd64.exe --restore --restore-all --file backups/all_dbs_20240321_123456.dir
 ```
 
 ### 完整参数示例
 
 ```bash
-pg-data-tool backup -d mydb \
-    -H localhost \
-    -p 5432 \
-    -U postgres \
-    -W your_password \
-    -f plain
+# 使用默认密码
+pg-data-tool-windows-amd64.exe --backup \
+    --dbname mydb \
+    --host localhost \
+    --port 5432 \
+    --user postgres \
+    --format plain
+
+# 指定自定义密码
+pg-data-tool-windows-amd64.exe --backup \
+    --dbname mydb \
+    --host localhost \
+    --port 5432 \
+    --user postgres \
+    --password your_password \
+    --format plain
 ```
 
 ## 参数说明
@@ -107,7 +199,7 @@ pg-data-tool backup -d mydb \
 - `-H, --host`: 数据库主机地址（默认：localhost）
 - `-p, --port`: 数据库端口（默认：5432）
 - `-U, --user`: 数据库用户名（默认：postgres）
-- `-W, --password`: 数据库密码
+- `-W, --password`: 数据库密码（默认：Pw!123456）
 
 ### 备份参数
 - `-d, --dbname`: 要备份的数据库名称
@@ -146,41 +238,3 @@ pg-data-tool backup -d mydb \
 1. 确保PostgreSQL客户端工具已正确安装并添加到系统PATH中
 2. 备份文件保存在`backups-yymmddHHmiss`目录下，例如：`backups-240321143022/`
 3. 备份文件名格式：`数据库名_时分秒.扩展名`
-4. 还原操作会覆盖目标数据库中的现有数据，请谨慎操作
-5. 全库还原时，如果某个数据库还原失败，会继续处理其他数据库
-6. 所有操作都会记录详细日志，存放在`logs`目录下
-
-## 日志说明
-
-日志文件保存在`logs`目录下，格式为：`pg-data-tool_YYYYMMDD.log`
-
-日志包含以下信息：
-- 操作类型（备份/还原）
-- 连接参数
-- 执行命令
-- 操作结果
-- 错误信息（如果有）
-
-## 常见问题
-
-1. 连接数据库失败
-   - 检查数据库服务是否运行
-   - 验证连接参数是否正确
-   - 确认用户权限是否足够
-
-2. 备份/还原失败
-   - 检查磁盘空间是否充足
-   - 确认文件权限是否正确
-   - 查看详细日志了解具体原因
-
-3. 全库操作失败
-   - 检查是否所有数据库都有访问权限
-   - 确认备份文件命名是否符合规范
-   - 查看日志了解具体失败的数据库 
-
-
-## 使用示例：
-
-pg-data-tool-windows-amd64.exe --backup --backup-all --host 192.168.12.175 --port 5432 --user postgres --password xxxx --format custom
-
-pg-data-tool-windows-amd64.exe --restore --restore-all --host 192.168.12.175 --port 5432 --user postgres --password xxxx --file ./backups-250507

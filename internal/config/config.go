@@ -16,9 +16,10 @@ type Config struct {
 // NewConfig 创建新的配置实例
 func NewConfig() *Config {
 	return &Config{
-		Host:   "localhost",
-		Port:   "5432",
-		User:   "postgres",
-		Format: "plain", // 默认使用plain格式（SQL文本格式）
+		Host:     "localhost",
+		Port:     "5432",
+		User:     "postgres",
+		Format:   "plain", // 默认使用plain格式（SQL文本格式）
+		Password: "Pw!123456",
 	}
 }
