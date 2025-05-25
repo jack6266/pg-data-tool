@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"pg-data-tool/internal/backup"
@@ -13,6 +16,19 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+// 设置控制台编码为 UTF-8
+func initConsoleEncoding() {
+	if runtime.GOOS == "windows" {
+		// 设置控制台代码页为 UTF-8 (65001)
+		cmd := exec.Command("chcp", "65001")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("警告: 设置控制台编码失败: %v\n", err)
+		}
+	}
+}
 
 var cfg *config.Config
 
@@ -78,12 +94,41 @@ func getInteractiveConfig() *config.Config {
 		}
 		cfg.Format = promptForInput("备份格式 (plain/custom/directory/tar)", cfg.Format)
 		cfg.File = promptForInput("备份文件保存路径", "")
+
+		// 只在directory模式下询问是否使用并行处理
+		if cfg.Format == "directory" {
+			cfg.UseParallel = promptForBool("是否使用并行处理", false)
+			if cfg.UseParallel {
+				parallelJobs := promptForInput("并行作业数", fmt.Sprintf("%d", cfg.ParallelJobs))
+				if jobs, err := fmt.Sscanf(parallelJobs, "%d", &cfg.ParallelJobs); err != nil || jobs != 1 {
+					fmt.Println("无效的并行作业数，使用默认值：", cfg.ParallelJobs)
+				}
+			} else {
+				cfg.ParallelJobs = 1
+				fmt.Println("已禁用并行处理，将使用单线程备份")
+			}
+		}
 	} else if restoreFlag {
 		cfg.RestoreAll = promptForBool("是否还原所有数据库", false)
 		if !cfg.RestoreAll {
 			cfg.DBName = promptForInput("要还原的数据库名称", "")
 		}
 		cfg.File = promptForInput("备份文件路径", "")
+
+		// 检查文件格式是否支持并行处理
+		ext := strings.ToLower(filepath.Ext(cfg.File))
+		if ext == ".dir" {
+			cfg.UseParallel = promptForBool("是否使用并行处理", false)
+			if cfg.UseParallel {
+				parallelJobs := promptForInput("并行作业数", fmt.Sprintf("%d", cfg.ParallelJobs))
+				if jobs, err := fmt.Sscanf(parallelJobs, "%d", &cfg.ParallelJobs); err != nil || jobs != 1 {
+					fmt.Println("无效的并行作业数，使用默认值：", cfg.ParallelJobs)
+				}
+			} else {
+				cfg.ParallelJobs = 1
+				fmt.Println("已禁用并行处理，将使用单线程还原")
+			}
+		}
 	}
 
 	return cfg
@@ -155,6 +200,9 @@ var rootCmd = &cobra.Command{
    - directory: 目录格式
    - tar: tar归档格式`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// 初始化控制台编码
+		initConsoleEncoding()
+
 		// 检查是否有命令行参数
 		hasArgs := false
 		cmd.Flags().Visit(func(flag *pflag.Flag) {

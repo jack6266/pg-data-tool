@@ -15,20 +15,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// DatabaseInfo 存储数据库信息
-type DatabaseInfo struct {
-	Size          string
-	TableCount    int
-	IndexCount    int
-	ViewCount     int
-	FunctionCount int
-}
-
-// Restorer 数据库还原器
-type Restorer struct {
-	cfg *config.Config
-}
-
 // NewRestorer 创建新的还原器
 func NewRestorer(cfg *config.Config) *Restorer {
 	return &Restorer{cfg: cfg}
@@ -40,7 +26,7 @@ func (r *Restorer) PerformRestore() error {
 	logger.Info("连接参数: 主机=%s, 端口=%s, 用户=%s", r.cfg.Host, r.cfg.Port, r.cfg.User)
 
 	// 交互式确认
-	if err := r.confirmRestore(); err != nil {
+	if err := ConfirmRestore(r.cfg); err != nil {
 		return err
 	}
 
@@ -62,90 +48,15 @@ func (r *Restorer) PerformRestore() error {
 		err = r.restoreSingle()
 	}
 
+	// 显示还原结果
+	DisplayRestoreResult(r.cfg, err == nil, err)
+
 	if err != nil {
-		fmt.Println("\n==========================================")
-		fmt.Println("❌ 数据库还原操作失败！")
-		fmt.Println("------------------------------------------")
-		fmt.Println("📝 错误详情：")
-		fmt.Printf("   - 错误信息：%v\n", err)
-		if r.cfg.RestoreAll {
-			fmt.Println("   - 操作类型：全库还原")
-		} else {
-			fmt.Printf("   - 目标数据库：%s\n", r.cfg.DBName)
-		}
-		fmt.Printf("   - 备份文件：%s\n", r.cfg.File)
-		fmt.Printf("   - 目标主机：%s\n", r.cfg.Host)
-		fmt.Printf("   - 目标端口：%s\n", r.cfg.Port)
-		fmt.Println("------------------------------------------")
-		fmt.Println("💡 建议：")
-		fmt.Println("   1. 检查备份文件是否完整")
-		fmt.Println("   2. 确认数据库连接信息是否正确")
-		fmt.Println("   3. 验证用户权限是否足够")
-		fmt.Println("   4. 查看日志获取更多信息")
-		fmt.Println("==========================================")
 		logger.Error("数据库还原操作失败: %v", err)
 		return err
 	}
 
-	// 显示还原完成信息
-	fmt.Println("\n==========================================")
-	fmt.Println("✅ 数据库还原操作已完成！")
-	if r.cfg.RestoreAll {
-		fmt.Println("📊 已完成全库还原")
-	} else {
-		fmt.Printf("📊 已完成数据库 %s 的还原\n", r.cfg.DBName)
-	}
-	fmt.Println("------------------------------------------")
-	fmt.Println("📝 还原详情：")
-	fmt.Printf("   - 备份文件：%s\n", r.cfg.File)
-	fmt.Printf("   - 目标主机：%s\n", r.cfg.Host)
-	fmt.Printf("   - 目标端口：%s\n", r.cfg.Port)
-	fmt.Printf("   - 操作用户：%s\n", r.cfg.User)
-	if r.cfg.AutoCreateDB {
-		fmt.Println("   - 自动创建数据库：是")
-	} else {
-		fmt.Println("   - 自动创建数据库：否")
-	}
-	fmt.Println("==========================================")
 	logger.Info("数据库还原操作已完成")
-
-	return nil
-}
-
-// confirmRestore 交互式确认还原操作
-func (r *Restorer) confirmRestore() error {
-	fmt.Printf("警告：即将还原数据库到以下服务器：\n")
-	if r.cfg.RestoreAll {
-		fmt.Printf("操作：全库还原\n")
-	} else {
-		fmt.Printf("操作：还原数据库 %s\n", r.cfg.DBName)
-	}
-	fmt.Printf("备份文件：%s\n", r.cfg.File)
-
-	// 交互式选择是否自动创建数据库
-	if !r.cfg.RestoreAll {
-		fmt.Printf("是否自动创建数据库（如果不存在）？(y/N): ")
-		var createDB string
-		fmt.Scanln(&createDB)
-		r.cfg.AutoCreateDB = createDB == "y" || createDB == "Y"
-		fmt.Printf("自动创建数据库：%v\n", r.cfg.AutoCreateDB)
-	} else {
-		fmt.Printf("是否自动创建数据库（如果不存在）？(y/N): ")
-		var createDB string
-		fmt.Scanln(&createDB)
-		r.cfg.AutoCreateDB = createDB == "y" || createDB == "Y"
-		fmt.Printf("自动创建数据库：%v\n", r.cfg.AutoCreateDB)
-	}
-
-	fmt.Printf("警告：还原操作将覆盖目标数据库中的现有数据。\n")
-	fmt.Printf("是否继续？(y/N): ")
-
-	var response string
-	fmt.Scanln(&response)
-	if response != "y" && response != "Y" {
-		return fmt.Errorf("用户取消还原操作")
-	}
-
 	return nil
 }
 
@@ -159,19 +70,7 @@ func (r *Restorer) validateParams() error {
 		return fmt.Errorf("错误：必须指定备份文件路径")
 	}
 
-	// 检查文件或目录是否存在
-	fileInfo, err := os.Stat(r.cfg.File)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("错误：备份文件或目录 %s 不存在", r.cfg.File)
-	}
-
-	if r.cfg.RestoreAll {
-		if !fileInfo.IsDir() && !strings.HasSuffix(r.cfg.File, ".dir") {
-			return fmt.Errorf("错误：全库还原需要指定备份目录或目录格式的备份文件")
-		}
-	}
-
-	return nil
+	return ValidateBackupFile(r.cfg.File, r.cfg.RestoreAll)
 }
 
 // restoreAll 执行全库还原
@@ -185,7 +84,7 @@ func (r *Restorer) restoreAll() error {
 // restoreSingle 执行单库还原
 func (r *Restorer) restoreSingle() error {
 	if r.cfg.AutoCreateDB {
-		if err := r.createDatabaseIfNotExists(r.cfg.DBName); err != nil {
+		if err := CreateDatabaseIfNotExists(r.cfg, r.cfg.DBName); err != nil {
 			return err
 		}
 	} else {
@@ -201,7 +100,7 @@ func (r *Restorer) restoreAllFromDirectory() error {
 	logger.Info("开始从目录还原所有数据库: %s", r.cfg.File)
 
 	// 获取目录下的所有备份文件
-	backupFiles, err := r.getBackupFiles()
+	backupFiles, err := GetBackupFiles(r.cfg.File)
 	if err != nil {
 		return err
 	}
@@ -243,28 +142,10 @@ func (r *Restorer) restoreAllFromDirectory() error {
 	return nil
 }
 
-// getBackupFiles 获取目录下的所有备份文件
-func (r *Restorer) getBackupFiles() ([]string, error) {
-	var backupFiles []string
-	err := filepath.Walk(r.cfg.File, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			ext := strings.ToLower(filepath.Ext(path))
-			if ext == ".sql" || ext == ".backup" || ext == ".tar" {
-				backupFiles = append(backupFiles, path)
-			}
-		}
-		return nil
-	})
-	return backupFiles, err
-}
-
 // processBackupFile 处理单个备份文件
 func (r *Restorer) processBackupFile(backupFile string) error {
 	fileName := filepath.Base(backupFile)
-	dbName := r.extractDatabaseName(fileName)
+	dbName := ExtractDatabaseName(fileName)
 	if dbName == "" {
 		return fmt.Errorf("无法从文件名 %s 提取数据库名", fileName)
 	}
@@ -273,7 +154,7 @@ func (r *Restorer) processBackupFile(backupFile string) error {
 
 	// 处理数据库创建
 	if r.cfg.AutoCreateDB {
-		if err := r.createDatabaseIfNotExists(dbName); err != nil {
+		if err := CreateDatabaseIfNotExists(r.cfg, dbName); err != nil {
 			return fmt.Errorf("创建数据库 %s 失败: %v", dbName, err)
 		}
 	} else {
@@ -283,7 +164,7 @@ func (r *Restorer) processBackupFile(backupFile string) error {
 	}
 
 	// 执行还原
-	if err := r.restoreSingleFile(backupFile, dbName); err != nil {
+	if err := RestoreSingleFile(r.cfg, backupFile, dbName); err != nil {
 		return fmt.Errorf("还原数据库 %s 失败: %v", dbName, err)
 	}
 
@@ -300,7 +181,7 @@ func (r *Restorer) processBackupFile(backupFile string) error {
 func (r *Restorer) restoreSingleDatabase() error {
 	logger.Info("开始还原数据库: %s", r.cfg.DBName)
 
-	if err := r.restoreSingleFile(r.cfg.File, r.cfg.DBName); err != nil {
+	if err := RestoreSingleFile(r.cfg, r.cfg.File, r.cfg.DBName); err != nil {
 		return err
 	}
 
@@ -314,7 +195,16 @@ func (r *Restorer) restoreSingleDatabase() error {
 
 // displayRestoredDatabaseInfo 显示还原后的数据库信息
 func (r *Restorer) displayRestoredDatabaseInfo(dbName string) error {
-	dbInfo, err := r.getDatabaseInfo(dbName)
+	// 连接到数据库
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		r.cfg.Host, r.cfg.Port, r.cfg.User, r.cfg.Password, dbName)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return fmt.Errorf("连接数据库失败: %v", err)
+	}
+	defer db.Close()
+
+	dbInfo, err := GetDatabaseInfo(db, dbName)
 	if err != nil {
 		return err
 	}
@@ -468,6 +358,9 @@ func (r *Restorer) restoreSingleFile(backupFile, dbName string) error {
 		return nil
 	case ".backup", ".tar", ".dir":
 		// 其他格式使用pg_restore命令
+		if r.cfg.UseParallel {
+			args = append(args, "-j", fmt.Sprintf("%d", r.cfg.ParallelJobs))
+		}
 		args = append(args, backupFile)
 		cmd := exec.Command("pg_restore", args...)
 		logger.Info("执行命令: pg_restore %v", args)
