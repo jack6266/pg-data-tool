@@ -1,30 +1,51 @@
 package config
 
-// Config 存储数据库连接和操作配置
+// Config 存储配置信息
 type Config struct {
-	Host         string
-	Port         string
-	User         string
-	Password     string
-	DBName       string
-	File         string
-	BackupAll    bool   // 是否备份所有数据库
-	Format       string // 备份格式：custom, plain, directory, tar
-	RestoreAll   bool   // 是否还原所有数据库
-	AutoCreateDB bool   // 是否自动创建数据库
-	ParallelJobs int    // 并行作业数，用于 pg_dump 的 -j 参数
-	UseParallel  bool   // 是否使用并行处理，默认为 false
+	// 源数据库连接信息
+	Host     string
+	Port     string
+	User     string
+	Password string
+	DBName   string
+
+	// 目标数据库连接信息（用于数据传输）
+	TargetHost     string
+	TargetPort     string
+	TargetUser     string
+	TargetPassword string
+
+	// 备份相关配置
+	BackupAll bool
+	Format    string
+	File      string
+
+	// 还原相关配置
+	RestoreAll   bool
+	AutoCreateDB bool // 是否自动创建数据库
+
+	// 传输相关配置
+	TransferAll       bool
+	IncludeBlobs      bool
+	IncludeIndexes    bool
+	IncludePrivileges bool
+
+	// 并行处理相关配置
+	UseParallel  bool
+	ParallelJobs int
 }
 
 // NewConfig 创建新的配置实例
 func NewConfig() *Config {
 	return &Config{
-		Host:         "localhost",
-		Port:         "5432",
-		User:         "postgres",
-		Format:       "plain", // 默认使用plain格式（SQL文本格式）
-		Password:     "Pw!123456",
-		ParallelJobs: 4,     // 默认使用4个并行作业
-		UseParallel:  false, // 默认不使用并行处理
+		Host:           "localhost",
+		Port:           "5432",
+		User:           "postgres",
+		Format:         "plain",
+		ParallelJobs:   4,
+		TransferAll:    false,
+		UseParallel:    false,
+		Password:       "Pw!123456", // 设置源数据库默认密码
+		TargetPassword: "Pw!123456", // 设置目标数据库默认密码
 	}
 }

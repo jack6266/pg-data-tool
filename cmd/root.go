@@ -12,6 +12,7 @@ import (
 	"pg-data-tool/internal/backup"
 	"pg-data-tool/internal/config"
 	"pg-data-tool/internal/restore"
+	"pg-data-tool/internal/transfer"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -68,14 +69,17 @@ func getInteractiveConfig() *config.Config {
 	fmt.Println("\n请选择操作类型：")
 	fmt.Println("1. 备份")
 	fmt.Println("2. 还原")
+	fmt.Println("3. 数据传输")
 	var choice string
-	fmt.Print("请选择 [1/2]: ")
+	fmt.Print("请选择 [1/2/3]: ")
 	fmt.Scanln(&choice)
 
 	if choice == "1" {
 		backupFlag = true
 	} else if choice == "2" {
 		restoreFlag = true
+	} else if choice == "3" {
+		transferFlag = true
 	} else {
 		fmt.Println("无效的选择")
 		os.Exit(1)
@@ -129,14 +133,38 @@ func getInteractiveConfig() *config.Config {
 				fmt.Println("已禁用并行处理，将使用单线程还原")
 			}
 		}
+	} else if transferFlag {
+		fmt.Println("\n=== 目标数据库信息 ===")
+		cfg.TargetHost = promptForInput("目标数据库主机地址", "")
+		cfg.TargetPort = promptForInput("目标数据库端口", "5432")
+		cfg.TargetUser = promptForInput("目标数据库用户名", "postgres")
+		cfg.TargetPassword = promptForInput("目标数据库密码", "Pw!123456")
+
+		cfg.TransferAll = promptForBool("是否传输所有数据库(y/n)", false)
+		if !cfg.TransferAll {
+			cfg.DBName = promptForInput("要传输的数据库名称", "")
+		}
+
+		fmt.Println("\n=== 传输选项 ===")
+		fmt.Println("💡 传输说明：")
+		fmt.Println("   - 支持跨服务器数据库传输")
+		fmt.Println("   - 可以选择是否包含大对象")
+		fmt.Println("   - 可以选择是否包含索引")
+		fmt.Println("   - 可以选择是否包含权限")
+		fmt.Println("------------------------------------------")
+
+		cfg.IncludeBlobs = promptForBool("是否包含大对象(y/n)", true)
+		cfg.IncludeIndexes = promptForBool("是否包含索引(y/n)", true)
+		cfg.IncludePrivileges = promptForBool("是否包含权限(y/n)", true)
 	}
 
 	return cfg
 }
 
 var (
-	backupFlag  bool
-	restoreFlag bool
+	backupFlag   bool
+	restoreFlag  bool
+	transferFlag bool
 )
 
 func init() {
@@ -149,6 +177,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.DBName, "dbname", "", "数据库名称（单库操作时必需）")
 	rootCmd.Flags().BoolVar(&backupFlag, "backup", false, "执行备份操作")
 	rootCmd.Flags().BoolVar(&restoreFlag, "restore", false, "执行还原操作")
+	rootCmd.Flags().BoolVar(&transferFlag, "transfer", false, "执行数据传输操作")
 	rootCmd.Flags().StringVar(&cfg.File, "file", "", "备份文件路径")
 	rootCmd.Flags().BoolVar(&cfg.BackupAll, "backup-all", false, "备份所有数据库（仅备份时有效）")
 	rootCmd.Flags().BoolVar(&cfg.RestoreAll, "restore-all", false, "还原所有数据库（仅还原时有效）")
@@ -186,6 +215,31 @@ func init() {
 	restoreCmd.Flags().BoolVarP(&cfg.RestoreAll, "restore-all", "a", false, "还原所有数据库")
 	restoreCmd.Flags().StringVarP(&cfg.File, "file", "f", "", "备份文件路径")
 	rootCmd.AddCommand(restoreCmd)
+
+	// 数据传输命令
+	transferCmd := &cobra.Command{
+		Use:   "transfer",
+		Short: "执行数据库传输",
+		Long: `执行数据库传输操作，支持以下功能：
+1. 跨服务器数据库传输
+2. 可选择是否包含大对象
+3. 可选择是否包含索引
+4. 可选择是否包含权限`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			transferer := transfer.NewTransferer(cfg)
+			return transferer.PerformTransfer()
+		},
+	}
+	transferCmd.Flags().StringVarP(&cfg.DBName, "dbname", "d", "", "要传输的数据库名称")
+	transferCmd.Flags().BoolVarP(&cfg.TransferAll, "transfer-all", "a", false, "传输所有数据库")
+	transferCmd.Flags().StringVar(&cfg.TargetHost, "target-host", "", "目标数据库主机地址")
+	transferCmd.Flags().StringVar(&cfg.TargetPort, "target-port", "5432", "目标数据库端口")
+	transferCmd.Flags().StringVar(&cfg.TargetUser, "target-user", "", "目标数据库用户名")
+	transferCmd.Flags().StringVar(&cfg.TargetPassword, "target-password", "", "目标数据库密码")
+	transferCmd.Flags().BoolVar(&cfg.IncludeBlobs, "include-blobs", true, "是否包含大对象")
+	transferCmd.Flags().BoolVar(&cfg.IncludeIndexes, "include-indexes", true, "是否包含索引")
+	transferCmd.Flags().BoolVar(&cfg.IncludePrivileges, "include-privileges", true, "是否包含权限")
+	rootCmd.AddCommand(transferCmd)
 }
 
 var rootCmd = &cobra.Command{
@@ -194,7 +248,8 @@ var rootCmd = &cobra.Command{
 	Long: `PostgreSQL数据备份还原工具，支持以下功能：
 1. 数据库备份（支持单库和全库备份）
 2. 数据库还原（支持单库和全库还原）
-3. 支持多种备份格式：
+3. 数据库传输（支持跨服务器传输）
+4. 支持多种备份格式：
    - plain: SQL文本格式（默认）
    - custom: 二进制格式
    - directory: 目录格式
@@ -221,8 +276,11 @@ var rootCmd = &cobra.Command{
 		} else if restoreFlag {
 			restorer := restore.NewRestorer(cfg)
 			err = restorer.PerformRestore()
+		} else if transferFlag {
+			transferer := transfer.NewTransferer(cfg)
+			err = transferer.PerformTransfer()
 		} else {
-			fmt.Println("请指定 --backup 或 --restore 参数")
+			fmt.Println("请指定 --backup、--restore 或 --transfer 参数")
 			return
 		}
 
