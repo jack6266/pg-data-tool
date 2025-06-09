@@ -108,7 +108,7 @@ func GetAllDatabases(cfg *config.Config) ([]string, error) {
 		SELECT datname 
 		FROM pg_database 
 		WHERE datistemplate = false 
-		AND datname NOT IN ('postgres', 'template0', 'template1')
+		AND datname NOT IN ('postgres', 'template0', 'template1', 'erdcloud')
 		ORDER BY datname
 	`)
 	if err != nil {
