@@ -21,8 +21,10 @@ type Config struct {
 	File      string
 
 	// 还原相关配置
-	RestoreAll   bool
-	AutoCreateDB bool // 是否自动创建数据库
+	RestoreAll     bool
+	AutoCreateDB   bool // 是否自动创建数据库
+	CleanData      bool // 是否在还原前清理数据库数据
+	CleanStructure bool // 是否在还原前清理数据库结构（表、视图、函数等）
 
 	// 传输相关配置
 	TransferAll       bool
@@ -40,7 +42,7 @@ func NewConfig() *Config {
 	return &Config{
 		Host:           "localhost",
 		Port:           "5432",
-		User:           "postgres",
+		User:           "erdcloud",
 		Format:         "plain",
 		ParallelJobs:   4,
 		TransferAll:    false,

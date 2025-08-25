@@ -118,6 +118,20 @@ func getInteractiveConfig() *config.Config {
 			cfg.DBName = promptForInput("要还原的数据库名称", "")
 		}
 		cfg.File = promptForInput("备份文件路径", "")
+		cfg.AutoCreateDB = promptForBool("如果数据库不存在是否自动创建", false)
+
+		// 清理选项
+		fmt.Println("\n=== 清理选项 ===")
+		fmt.Println("💡 清理说明：")
+		fmt.Println("   - 清理数据：只删除表中的数据，保留表结构")
+		fmt.Println("   - 清理结构：删除所有表、视图、函数、序列等数据库对象")
+		fmt.Println("   - 清理结构包含清理数据的功能")
+		fmt.Println("------------------------------------------")
+
+		cfg.CleanStructure = promptForBool("是否在还原前清理数据库结构（表、视图、函数等）", false)
+		if !cfg.CleanStructure {
+			cfg.CleanData = promptForBool("是否在还原前清理数据库中的所有数据", false)
+		}
 
 		// 检查文件格式是否支持并行处理
 		ext := strings.ToLower(filepath.Ext(cfg.File))
@@ -137,7 +151,7 @@ func getInteractiveConfig() *config.Config {
 		fmt.Println("\n=== 目标数据库信息 ===")
 		cfg.TargetHost = promptForInput("目标数据库主机地址", "")
 		cfg.TargetPort = promptForInput("目标数据库端口", "5432")
-		cfg.TargetUser = promptForInput("目标数据库用户名", "postgres")
+		cfg.TargetUser = promptForInput("目标数据库用户名", "erdcloud")
 		cfg.TargetPassword = promptForInput("目标数据库密码", "Pw!123456")
 
 		cfg.TransferAll = promptForBool("是否传输所有数据库(y/n)", false)
@@ -214,6 +228,9 @@ func init() {
 	restoreCmd.Flags().StringVarP(&cfg.DBName, "dbname", "d", "", "要还原的数据库名称")
 	restoreCmd.Flags().BoolVarP(&cfg.RestoreAll, "restore-all", "a", false, "还原所有数据库")
 	restoreCmd.Flags().StringVarP(&cfg.File, "file", "f", "", "备份文件路径")
+	restoreCmd.Flags().BoolVar(&cfg.AutoCreateDB, "auto-create-db", false, "如果数据库不存在则自动创建")
+	restoreCmd.Flags().BoolVar(&cfg.CleanData, "clean-data", false, "在还原前清理数据库中的所有数据")
+	restoreCmd.Flags().BoolVar(&cfg.CleanStructure, "clean-structure", false, "在还原前清理数据库中的所有结构（表、视图、函数等）")
 	rootCmd.AddCommand(restoreCmd)
 
 	// 数据传输命令

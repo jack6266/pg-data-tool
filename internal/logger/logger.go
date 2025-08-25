@@ -11,6 +11,7 @@ import (
 
 var (
 	infoLogger  *log.Logger
+	warnLogger  *log.Logger
 	errorLogger *log.Logger
 	logFile     *os.File
 )
@@ -37,6 +38,7 @@ func Init() error {
 
 	// 初始化日志记录器
 	infoLogger = log.New(multiWriter, "[INFO] ", log.Ldate|log.Ltime)
+	warnLogger = log.New(multiWriter, "[WARN] ", log.Ldate|log.Ltime)
 	errorLogger = log.New(multiWriter, "[ERROR] ", log.Ldate|log.Ltime)
 
 	return nil
@@ -55,6 +57,14 @@ func Info(format string, v ...interface{}) {
 		Init()
 	}
 	infoLogger.Printf(format, v...)
+}
+
+// Warn 记录警告日志
+func Warn(format string, v ...interface{}) {
+	if warnLogger == nil {
+		Init()
+	}
+	warnLogger.Printf(format, v...)
 }
 
 // Error 记录错误日志
