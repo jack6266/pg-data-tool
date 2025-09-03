@@ -173,7 +173,7 @@ func (r *Restorer) processBackupFile(backupFile string) error {
 		logger.Error("获取数据库 %s 信息失败: %v", dbName, err)
 	}
 
-	logger.Info("数据库 %s 还原成功", dbName)
+	logger.Success("数据库 %s 还原成功", dbName)
 	return nil
 }
 
@@ -257,7 +257,7 @@ func (r *Restorer) createDatabaseIfNotExists(dbName string) error {
 		if err != nil {
 			return fmt.Errorf("创建数据库失败: %v", err)
 		}
-		logger.Info("数据库 %s 创建成功", dbName)
+		logger.Success("数据库 %s 创建成功", dbName)
 	} else {
 		logger.Info("数据库 %s 已存在", dbName)
 	}

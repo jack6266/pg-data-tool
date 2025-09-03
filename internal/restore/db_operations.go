@@ -361,7 +361,7 @@ func CreateDatabaseIfNotExists(cfg *config.Config, dbName string) error {
 		if err != nil {
 			return fmt.Errorf("创建数据库失败: %v", err)
 		}
-		logger.Info("数据库 %s 创建成功", dbName)
+		logger.Success("数据库 %s 创建成功", dbName)
 	} else {
 		logger.Info("数据库 %s 已存在", dbName)
 	}
