@@ -73,8 +73,15 @@ func (b *Backuper) backupAll(backupDir string) error {
 
 // backupSingle 执行单库备份
 func (b *Backuper) backupSingle(backupDir string) error {
+	// 物理备份和增量备份不需要指定具体数据库名称，它们备份整个数据目录
+	if b.cfg.BackupType == "physical" || b.cfg.BackupType == "incremental" {
+		logger.Info("执行%s备份（备份整个数据目录）", b.cfg.BackupType)
+		return BackupSingleDatabase(b.cfg, "", backupDir)
+	}
+
+	// 逻辑备份需要指定数据库名称
 	if b.cfg.DBName == "" {
-		return fmt.Errorf("错误：必须指定数据库名称或使用 --backup-all 参数进行全库备份")
+		return fmt.Errorf("错误：逻辑备份必须指定数据库名称或使用 --backup-all 参数进行全库备份")
 	}
 
 	// 检查目标数据库连接
@@ -87,7 +94,20 @@ func (b *Backuper) backupSingle(backupDir string) error {
 
 // processDatabase 处理单个数据库的备份
 func (b *Backuper) processDatabase(dbname, backupDir string) error {
-	// 检查数据库连接
+	// 物理备份和增量备份不需要检查具体数据库连接，只需要检查系统连接
+	if b.cfg.BackupType == "physical" || b.cfg.BackupType == "incremental" {
+		logger.Info("执行%s备份，备份整个PostgreSQL数据目录", b.cfg.BackupType)
+
+		// 执行备份
+		if err := BackupSingleDatabase(b.cfg, "", backupDir); err != nil {
+			return err
+		}
+
+		logger.Success("%s备份完成，备份保存在: %s", b.cfg.BackupType, backupDir)
+		return nil
+	}
+
+	// 逻辑备份需要检查具体数据库连接
 	if err := utils.CheckDatabaseConnection(b.cfg.Host, b.cfg.Port, b.cfg.User, b.cfg.Password, dbname); err != nil {
 		return fmt.Errorf("数据库 %s 连接失败: %v", dbname, err)
 	}
