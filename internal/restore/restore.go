@@ -83,13 +83,17 @@ func (r *Restorer) restoreAll() error {
 
 // restoreSingle 执行单库还原
 func (r *Restorer) restoreSingle() error {
-	if r.cfg.AutoCreateDB {
-		if err := CreateDatabaseIfNotExists(r.cfg, r.cfg.DBName); err != nil {
-			return err
-		}
-	} else {
-		if err := utils.CheckDatabaseConnection(r.cfg.Host, r.cfg.Port, r.cfg.User, r.cfg.Password, r.cfg.DBName); err != nil {
-			return err
+	// 如果选择了删除数据库，则跳过数据库检查和创建步骤
+	// 因为RestoreSingleFile会处理数据库的删除和重新创建
+	if !r.cfg.DropDatabase {
+		if r.cfg.AutoCreateDB {
+			if err := CreateDatabaseIfNotExists(r.cfg, r.cfg.DBName); err != nil {
+				return err
+			}
+		} else {
+			if err := utils.CheckDatabaseConnection(r.cfg.Host, r.cfg.Port, r.cfg.User, r.cfg.Password, r.cfg.DBName); err != nil {
+				return err
+			}
 		}
 	}
 	return r.restoreSingleDatabase()
@@ -152,14 +156,16 @@ func (r *Restorer) processBackupFile(backupFile string) error {
 
 	logger.Info("正在还原数据库 %s 从文件 %s", dbName, backupFile)
 
-	// 处理数据库创建
-	if r.cfg.AutoCreateDB {
-		if err := CreateDatabaseIfNotExists(r.cfg, dbName); err != nil {
-			return fmt.Errorf("创建数据库 %s 失败: %v", dbName, err)
-		}
-	} else {
-		if err := utils.CheckDatabaseConnection(r.cfg.Host, r.cfg.Port, r.cfg.User, r.cfg.Password, dbName); err != nil {
-			return fmt.Errorf("数据库 %s 连接失败: %v", dbName, err)
+	// 处理数据库创建（如果选择删除数据库则跳过）
+	if !r.cfg.DropDatabase {
+		if r.cfg.AutoCreateDB {
+			if err := CreateDatabaseIfNotExists(r.cfg, dbName); err != nil {
+				return fmt.Errorf("创建数据库 %s 失败: %v", dbName, err)
+			}
+		} else {
+			if err := utils.CheckDatabaseConnection(r.cfg.Host, r.cfg.Port, r.cfg.User, r.cfg.Password, dbName); err != nil {
+				return fmt.Errorf("数据库 %s 连接失败: %v", dbName, err)
+			}
 		}
 	}
 

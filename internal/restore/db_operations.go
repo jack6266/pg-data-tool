@@ -7,12 +7,76 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"pg-data-tool/internal/config"
 	"pg-data-tool/internal/logger"
 
 	_ "github.com/lib/pq"
 )
+
+// DropAndRecreateDatabase 删除并重新创建数据库
+func DropAndRecreateDatabase(cfg *config.Config, dbName string) error {
+	logger.Info("开始删除并重新创建数据库: %s", dbName)
+
+	// 连接到postgres系统数据库
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return fmt.Errorf("连接postgres数据库失败: %v", err)
+	}
+	defer db.Close()
+
+	// 测试连接
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("数据库连接测试失败: %v", err)
+	}
+
+	// 检查数据库是否存在
+	var exists bool
+	err = db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM pg_database WHERE datname = $1
+		)
+	`, dbName).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("检查数据库是否存在失败: %v", err)
+	}
+
+	if exists {
+		logger.Info("正在删除数据库: %s", dbName)
+
+		// 断开所有连接到目标数据库的会话
+		_, err = db.Exec(`
+			SELECT pg_terminate_backend(pid) 
+			FROM pg_stat_activity 
+			WHERE datname = $1 AND pid <> pg_backend_pid()
+		`, dbName)
+		if err != nil {
+			logger.Warn("断开数据库连接失败，继续执行: %v", err)
+		}
+
+		// 删除数据库
+		_, err = db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+		if err != nil {
+			return fmt.Errorf("删除数据库失败: %v", err)
+		}
+		logger.Success("数据库 %s 删除成功", dbName)
+	} else {
+		logger.Info("数据库 %s 不存在，无需删除", dbName)
+	}
+
+	// 重新创建数据库
+	logger.Info("正在创建数据库: %s", dbName)
+	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+	if err != nil {
+		return fmt.Errorf("创建数据库失败: %v", err)
+	}
+
+	logger.Success("数据库 %s 重新创建成功", dbName)
+	return nil
+}
 
 // CleanDatabaseStructure 清理数据库中的所有结构（表、视图、函数、序列等）
 func CleanDatabaseStructure(cfg *config.Config, dbName string) error {
@@ -371,14 +435,35 @@ func CreateDatabaseIfNotExists(cfg *config.Config, dbName string) error {
 
 // RestoreSingleFile 还原单个备份文件到指定数据库
 func RestoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
-	// 如果配置了清理结构选项，则先清理数据库结构
-	if cfg.CleanStructure {
+	switch cfg.RestoreType {
+	case "logical":
+		return LogicalRestoreSingleFile(cfg, backupFile, dbName)
+	case "physical":
+		return PhysicalRestore(cfg, backupFile)
+	case "incremental":
+		return IncrementalRestore(cfg, backupFile, dbName)
+	default:
+		return fmt.Errorf("不支持的还原类型: %s", cfg.RestoreType)
+	}
+}
+
+// LogicalRestoreSingleFile 逻辑还原单个备份文件到指定数据库
+func LogicalRestoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
+	// 清理优先级：删除数据库 > 清理结构 > 清理数据
+	if cfg.DropDatabase {
+		// 最彻底的清理：删除并重新创建数据库
+		logger.Info("配置了删除数据库选项，开始删除并重新创建数据库 %s", dbName)
+		if err := DropAndRecreateDatabase(cfg, dbName); err != nil {
+			return fmt.Errorf("删除并重新创建数据库失败: %v", err)
+		}
+	} else if cfg.CleanStructure {
+		// 清理数据库结构但保留数据库本身
 		logger.Info("配置了清理结构选项，开始清理数据库 %s 的结构", dbName)
 		if err := CleanDatabaseStructure(cfg, dbName); err != nil {
 			logger.Warn("清理数据库结构失败，继续执行还原: %v", err)
 		}
 	} else if cfg.CleanData {
-		// 如果只配置了清理数据选项，则只清理数据库数据
+		// 只清理数据，保留结构
 		logger.Info("配置了清理数据选项，开始清理数据库 %s 的数据", dbName)
 		if err := CleanDatabaseData(cfg, dbName); err != nil {
 			logger.Warn("清理数据库数据失败，继续执行还原: %v", err)
@@ -431,4 +516,133 @@ func RestoreSingleFile(cfg *config.Config, backupFile, dbName string) error {
 	default:
 		return fmt.Errorf("不支持的备份文件格式: %s", ext)
 	}
+}
+
+// PhysicalRestore 执行物理还原
+func PhysicalRestore(cfg *config.Config, backupPath string) error {
+	logger.Info("开始执行物理还原")
+
+	// 检查PostgreSQL是否已停止
+	logger.Warn("物理还原需要停止PostgreSQL服务")
+	logger.Info("请确保PostgreSQL服务已停止，然后继续...")
+
+	// 检查数据目录
+	if cfg.File == "" {
+		return fmt.Errorf("物理还原需要指定数据目录路径")
+	}
+
+	// 检查备份文件
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		return fmt.Errorf("备份文件不存在: %s", backupPath)
+	}
+
+	// 备份当前数据目录
+	timestamp := time.Now().Format("20060102_150405")
+	backupDataDir := fmt.Sprintf("%s_backup_%s", cfg.File, timestamp)
+
+	logger.Info("备份当前数据目录到: %s", backupDataDir)
+	if err := os.Rename(cfg.File, backupDataDir); err != nil {
+		return fmt.Errorf("备份当前数据目录失败: %v", err)
+	}
+
+	// 创建新的数据目录
+	if err := os.MkdirAll(cfg.File, 0700); err != nil {
+		return fmt.Errorf("创建数据目录失败: %v", err)
+	}
+
+	// 解压备份文件
+	if strings.HasSuffix(backupPath, ".tar") || strings.HasSuffix(backupPath, ".tar.gz") {
+		logger.Info("解压备份文件...")
+		args := []string{"-xf", backupPath, "-C", cfg.File}
+		if strings.HasSuffix(backupPath, ".tar.gz") {
+			args = []string{"-xzf", backupPath, "-C", cfg.File}
+		}
+
+		cmd := exec.Command("tar", args...)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("解压备份文件失败: %v\n错误输出: %s", err, output)
+		}
+	} else {
+		// 复制目录
+		logger.Info("复制备份目录...")
+		cmd := exec.Command("cp", "-r", backupPath+"/.", cfg.File)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("复制备份目录失败: %v\n错误输出: %s", err, output)
+		}
+	}
+
+	logger.Success("物理还原完成")
+	logger.Info("请启动PostgreSQL服务并检查数据完整性")
+
+	return nil
+}
+
+// IncrementalRestore 执行增量备份恢复
+func IncrementalRestore(cfg *config.Config, incrementalPath, dbName string) error {
+	logger.Info("开始执行增量备份恢复")
+
+	// 检查基础备份
+	if cfg.BaseBackupPath == "" {
+		return fmt.Errorf("增量恢复需要指定基础备份路径 (--base-backup-path)")
+	}
+
+	// 首先执行基础备份的物理还原
+	logger.Info("首先恢复基础备份: %s", cfg.BaseBackupPath)
+	if err := PhysicalRestore(cfg, cfg.BaseBackupPath); err != nil {
+		return fmt.Errorf("恢复基础备份失败: %v", err)
+	}
+
+	// 应用WAL日志
+	logger.Info("应用增量备份中的WAL日志")
+
+	// 创建recovery.conf文件（PostgreSQL 11及以下）或修改postgresql.conf（PostgreSQL 12+）
+	if err := createRecoveryConfig(cfg, incrementalPath); err != nil {
+		return fmt.Errorf("创建恢复配置失败: %v", err)
+	}
+
+	logger.Success("增量备份恢复配置完成")
+	logger.Info("请启动PostgreSQL服务，它将自动应用WAL日志进行恢复")
+
+	return nil
+}
+
+// createRecoveryConfig 创建恢复配置
+func createRecoveryConfig(cfg *config.Config, walPath string) error {
+	logger.Info("创建恢复配置文件")
+
+	// PostgreSQL 12+ 使用 postgresql.conf + recovery.signal
+	recoverySignalPath := filepath.Join(cfg.File, "recovery.signal")
+	if err := os.WriteFile(recoverySignalPath, []byte(""), 0644); err != nil {
+		return fmt.Errorf("创建recovery.signal失败: %v", err)
+	}
+
+	// 添加恢复配置到postgresql.conf
+	configPath := filepath.Join(cfg.File, "postgresql.conf")
+
+	recoveryConfig := fmt.Sprintf(`
+# 恢复配置
+restore_command = 'cp %s/%%f %%p'
+recovery_target_action = 'promote'
+`, walPath)
+
+	// 如果指定了目标时间
+	if cfg.TargetTime != "" {
+		recoveryConfig += fmt.Sprintf("recovery_target_time = '%s'\n", cfg.TargetTime)
+	}
+
+	// 追加到postgresql.conf
+	file, err := os.OpenFile(configPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("打开postgresql.conf失败: %v", err)
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(recoveryConfig); err != nil {
+		return fmt.Errorf("写入恢复配置失败: %v", err)
+	}
+
+	logger.Success("恢复配置创建完成")
+	return nil
 }

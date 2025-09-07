@@ -192,13 +192,3 @@ func Fatal(format string, v ...interface{}) {
 	}
 	os.Exit(1)
 }
-
-// SetColorEnabled 设置是否启用颜色输出
-func SetColorEnabled(enabled bool) {
-	colorEnabled = enabled
-}
-
-// IsColorEnabled 返回是否启用了颜色输出
-func IsColorEnabled() bool {
-	return colorEnabled
-}
